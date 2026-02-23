@@ -22,7 +22,9 @@ export default function Home() {
 
     const url = mode === 'number'
       ? `/api/search?q=${encodeURIComponent(query)}`
-      : `/api/search?name=${encodeURIComponent(query)}&set=${encodeURIComponent(set)}`
+      : set
+          ? `/api/search?name=${encodeURIComponent(query)}&set=${encodeURIComponent(set)}`
+          : `/api/search?name=${encodeURIComponent(query)}`
 
     try {
       const res  = await fetch(url)
@@ -96,9 +98,8 @@ export default function Home() {
                 type="text"
                 value={set}
                 onChange={e => setSet(e.target.value)}
-                placeholder="Set, e.g. EB-03"
+                placeholder="Set (optional)"
                 className="w-36 bg-zinc-800 border border-zinc-700 rounded px-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-400"
-                required
               />
             </div>
           )}

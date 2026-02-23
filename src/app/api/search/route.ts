@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { searchByCardNumber, searchByName } from '@/lib/search'
+import { searchByCardNumber, searchByName, searchByNameGlobal } from '@/lib/search'
 import { syncSet } from '@/lib/sync'
 
 export async function GET(request: Request) {
@@ -9,21 +9,50 @@ export async function GET(request: Request) {
   const set  = searchParams.get('set')
 
   try {
+    // Mode 1: by card number
     if (q) {
       const results = await searchByCardNumber(q)
       return NextResponse.json(results)
     }
 
-    if (name && set) {
-      let results = await searchByName(name, set)
+    // Mode 2: by name (with optional set)
+    if (name) {
+      // No set provided — search across all already-synced sets
+      if (!set) {
+        const results = await searchByNameGlobal(name)
+        return NextResponse.json(results)
+      }
 
-      // If no results, the set may not be synced yet — try syncing and retry once
+      // Set provided — search within that set, auto-sync if not found
+      let results: Awaited<ReturnType<typeof searchByName>> = []
+
+      try {
+        results = await searchByName(name, set)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : ''
+
+        if (message.startsWith('Set not found')) {
+          // Set not in DB yet — try syncing it from tcgcsv
+          try {
+            await syncSet(set)
+            results = await searchByName(name, set)
+          } catch {
+            // set abbreviation not valid in tcgcsv either
+            return NextResponse.json({ error: `Set not found: ${set}` }, { status: 404 })
+          }
+        } else {
+          throw err
+        }
+      }
+
+      // Set was found but returned no results — try syncing and retry
+      // (handles case where set is in DB but has no products)
       if (results.length === 0) {
         try {
           await syncSet(set)
           results = await searchByName(name, set)
         } catch {
-          // syncSet throws if set abbreviation not found in tcgcsv — ignore and return []
+          // sync skipped (TTL) or failed — return empty, don't error
         }
       }
 
@@ -31,7 +60,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json(
-      { error: 'Provide either ?q= or both ?name= and ?set=' },
+      { error: 'Provide either ?q= or ?name= (with optional &set=)' },
       { status: 400 }
     )
   } catch (err) {

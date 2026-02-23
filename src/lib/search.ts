@@ -124,3 +124,16 @@ export async function searchByName(name: string, set: string): Promise<CardResul
 
   return attachPrices(data as CardResult[])
 }
+
+// Search by name across ALL synced sets (no set required)
+export async function searchByNameGlobal(name: string): Promise<CardResult[]> {
+  const { data, error } = await supabase
+    .from('products')
+    .select('product_id, name, card_number, card_type, colors, rarity, cost, power, counter_plus, tags, is_alt_art, is_manga, is_sp, url, image_url')
+    .ilike('name', `%${name}%`)
+
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) return []
+
+  return attachPrices(data as CardResult[])
+}
